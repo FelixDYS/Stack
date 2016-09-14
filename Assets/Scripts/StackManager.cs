@@ -1,13 +1,17 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class StackManager : MonoBehaviour
 {
-
     public Color32[] gameColors;
     public Material stackMat;
+    public Text scoreText;
+    public GameObject Menu;
 
+    private const float MOVIE_SIZE = 5f;
     private const float BOUNDS_SIZE = 3.5f;
     private const float STACK_MOVING_SPEED = 5f;
     private const float ERROR_MARGIN = 0.1f;
@@ -24,6 +28,9 @@ public class StackManager : MonoBehaviour
     private float tileTransition = 0f;
     private float tileSpeed = 2.5f;
     private float secondaryPosition;
+    private float dirMovie = MOVIE_SIZE;
+    private float timer = 0;
+    private float movingSpeed = 1f;
 
     private bool isMovingOnX = true;
     private bool isGameOver = false;
@@ -32,17 +39,33 @@ public class StackManager : MonoBehaviour
     // Use this for initialization
     void Start ()
     {
+        Init();
+    }
+
+    private void Init()
+    {
         stacks = new GameObject[transform.childCount];
+        int colorIndex = UnityEngine.Random.Range(0, stacks.Length);
         for (int i = 0; i < transform.childCount; i++)
         {
             stacks[i] = transform.GetChild(i).gameObject;
-            ColorMesh(stacks[i].GetComponent<MeshFilter>().mesh);
+            ColorMesh(stacks[i].GetComponent<MeshFilter>().mesh, colorIndex + i);
         }
         stackIndex = transform.childCount - 1;
     }
-	
-	// Update is called once per frame
-	void Update ()
+
+    public void RePlayButtonPress()
+    {
+        SceneManager.LoadScene("MainScene");
+    }
+
+    public void MenuButtonPress()
+    {
+        SceneManager.LoadScene("MenuScene");
+    }
+
+    // Update is called once per frame
+    void Update ()
     {
         if (isGameOver)
         {
@@ -54,7 +77,13 @@ public class StackManager : MonoBehaviour
             if (PlaceTile())
             {
                 SpawnTile();
+                timer = 0;
                 scoreCount++;
+                if (scoreCount % 5 == 0 && movingSpeed < 1.8f)
+                {
+                    movingSpeed += 0.05f;
+                }
+                scoreText.text = scoreCount.ToString();
             }
             else
             {
@@ -69,14 +98,22 @@ public class StackManager : MonoBehaviour
 
     private void MoveTile()
     {
-        tileTransition += Time.deltaTime * tileSpeed;
+        if (Mathf.Abs(tileTransition) == MOVIE_SIZE)
+        {
+            dirMovie = -dirMovie;
+            timer = 0;
+        }
+
+        timer += Time.deltaTime * movingSpeed;
+        tileTransition = Mathf.Lerp(dirMovie, -dirMovie, timer);
+
         if (isMovingOnX)
         {
-            stacks[stackIndex].transform.localPosition = new Vector3(Mathf.Sin(tileTransition) * BOUNDS_SIZE, scoreCount, secondaryPosition);
+            stacks[stackIndex].transform.localPosition = new Vector3(tileTransition, scoreCount, secondaryPosition);
         }
         else
         {
-            stacks[stackIndex].transform.localPosition = new Vector3(secondaryPosition, scoreCount, Mathf.Sin(tileTransition) * BOUNDS_SIZE);
+            stacks[stackIndex].transform.localPosition = new Vector3(secondaryPosition, scoreCount, tileTransition);
         }
     }
 
@@ -85,6 +122,7 @@ public class StackManager : MonoBehaviour
         isGameOver = true;
         Debug.Log("Game Over");
         stacks[stackIndex].AddComponent<Rigidbody>();
+        Menu.SetActive(isGameOver);
     }
 
     private void SpawnTile()
@@ -96,21 +134,29 @@ public class StackManager : MonoBehaviour
             stackIndex = transform.childCount - 1;
         }
         desiredPosition = (Vector3.down) * scoreCount;
-        stacks[stackIndex].transform.localPosition = new Vector3(0, scoreCount, 0);
+
+        if (isMovingOnX)
+        {
+            stacks[stackIndex].transform.localPosition = new Vector3(-dirMovie, scoreCount, 0);
+        }
+        else
+        {
+            stacks[stackIndex].transform.localPosition = new Vector3(0, scoreCount, -dirMovie);
+        }
         stacks[stackIndex].transform.localScale = new Vector3(stackBounds.x, 1, stackBounds.y);
 
-        ColorMesh(stacks[stackIndex].GetComponent<MeshFilter>().mesh);  
+        ColorMesh(stacks[stackIndex].GetComponent<MeshFilter>().mesh, scoreCount);  
     }
 
-    private void ColorMesh(Mesh mesh)
+    private void ColorMesh(Mesh mesh, int scoreIndex)
     {
         Vector3[] vertices = mesh.vertices;
         Color[] colors = new Color[vertices.Length];
-        float f = Mathf.Sin(scoreCount * 0.25f);
+        float f = Mathf.Sin(scoreIndex * 0.25f);
 
         for (int i = 0; i < vertices.Length; i++)
         {
-            colors[i] = Lerp(gameColors, scoreCount);
+            colors[i] = Lerp(gameColors, scoreIndex);
         }
 
         mesh.colors = colors;
@@ -134,7 +180,7 @@ public class StackManager : MonoBehaviour
         go.AddComponent<Rigidbody>().mass = 4f;
 
         go.GetComponent<MeshRenderer>().material = stackMat;
-        ColorMesh(go.GetComponent<MeshFilter>().mesh);
+        ColorMesh(go.GetComponent<MeshFilter>().mesh, scoreCount);
     }
     private bool PlaceTile()
     {
